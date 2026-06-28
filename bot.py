@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
-CHAT_ID    = "1049000378"
+CHAT_ID    = "-1003872921226"
 SYMBOL     = "^NSEI"
 INTERVAL   = "15m"
 SCAN_EVERY = 60
