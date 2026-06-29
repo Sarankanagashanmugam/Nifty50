@@ -2,19 +2,37 @@ import yfinance as yf
 import pandas as pd
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
 CHAT_ID    = "-1003872921226"
 SYMBOL     = "^NSEI"
-INTERVAL   = "15m"
+INTERVAL   = "5m"          # ✅ Changed to 5 minutes
 SCAN_EVERY = 60
 SWING_LEN  = 5
 RR_TP1     = 1.5
 RR_TP2     = 3.0
 SL_BUFFER  = 15
 
+# Option Settings
+OPT_TP1 = 25
+OPT_TP2 = 50
+OPT_SL  = 25
+
 last_signal = {"type": None, "bar": 0}
+
+# ✅ IST Timezone fix
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def is_market_open():
+    now_ist = datetime.now(IST)
+    # Monday=0 to Friday=4
+    if now_ist.weekday() >= 5:
+        return False
+    # Market hours 9:15 AM to 3:30 PM IST
+    market_open  = now_ist.replace(hour=9,  minute=15, second=0)
+    market_close = now_ist.replace(hour=15, minute=30, second=0)
+    return market_open <= now_ist <= market_close
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -27,13 +45,21 @@ def send_telegram(message):
 
 def get_candles():
     try:
-        df = yf.download(SYMBOL, period="5d", interval=INTERVAL, progress=False)
+        df = yf.download(SYMBOL, period="2d", interval=INTERVAL, progress=False)
         df.dropna(inplace=True)
         df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
         return df.reset_index()
     except Exception as e:
         print("Data error:", e)
         return None
+
+def get_atm_strike(price):
+    return round(price / 50) * 50
+
+def get_option_premium(nifty_price, strike):
+    diff = abs(nifty_price - strike)
+    base_premium = max(30, 150 - diff * 0.5)
+    return round(base_premium)
 
 def find_swings(df):
     highs, lows = [], []
@@ -54,27 +80,46 @@ def find_ob(df, bos_i, direction):
             return {"top": df["high"].iloc[i], "bot": df["low"].iloc[i]}
     return None
 
-def format_signal(signal, entry, sl, tp1, tp2):
-    risk  = abs(entry - sl)
-    rr    = round(abs(tp2 - entry) / risk, 1) if risk > 0 else 0
-    now   = datetime.now().strftime("%d %b %Y  %H:%M IST")
-    emoji = "🟢" if signal == "BUY" else "🔴"
-    arrow = "▲" if signal == "BUY" else "▼"
-    trend = "BULLISH" if signal == "BUY" else "BEARISH"
-    pts1  = round(tp1 - entry) if signal == "BUY" else round(entry - tp1)
-    pts2  = round(tp2 - entry) if signal == "BUY" else round(entry - tp2)
+def format_signal(signal, entry, sl, tp1, tp2, nifty_price):
+    risk     = abs(entry - sl)
+    rr       = round(abs(tp2 - entry) / risk, 1) if risk > 0 else 0
+    now_ist  = datetime.now(IST).strftime("%d %b %Y  %H:%M IST")
+    emoji    = "🟢" if signal == "BUY" else "🔴"
+    arrow    = "▲" if signal == "BUY" else "▼"
+    trend    = "BULLISH" if signal == "BUY" else "BEARISH"
+    pts1     = round(tp1 - entry) if signal == "BUY" else round(entry - tp1)
+    pts2     = round(tp2 - entry) if signal == "BUY" else round(entry - tp2)
+
+    # ATM Option
+    atm_strike = get_atm_strike(nifty_price)
+    opt_type   = "CE 📈" if signal == "BUY" else "PE 📉"
+    premium    = get_option_premium(nifty_price, atm_strike)
+    opt_tp1    = premium + OPT_TP1
+    opt_tp2    = premium + OPT_TP2
+    opt_sl     = premium - OPT_SL
+
     return f"""{emoji} <b>SMC SIGNAL — NIFTY 50</b> {emoji}
 
-{arrow} <b>{signal}</b> | 15m | {trend}
+{arrow} <b>{signal}</b> | ⏱️ 5m | {trend}
 
 ━━━━━━━━━━━━━━━━━
 📍 <b>Entry :</b> <code>{round(entry)}</code>
 🛑 <b>SL    :</b> <code>{round(sl)}</code>
-🎯 <b>TP1   :</b> <code>{round(tp1)}</code> (+{pts1} pts)
-🏆 <b>TP2   :</b> <code>{round(tp2)}</code> (+{pts2} pts)
+🎯 <b>TP1   :</b> <code>{round(tp1)}</code>  (+{pts1} pts)
+🏆 <b>TP2   :</b> <code>{round(tp2)}</code>  (+{pts2} pts)
 📊 <b>R:R   :</b> 1:{rr}
 ━━━━━━━━━━━━━━━━━
-🕐 {now}
+🎯 <b>ATM OPTION</b>
+
+📌 <b>Strike :</b> <code>{atm_strike} {opt_type}</code>
+💰 <b>Premium:</b> <code>₹{premium}</code>
+🎯 <b>TP1    :</b> <code>₹{opt_tp1}</code>  (+25 pts)
+🏆 <b>TP2    :</b> <code>₹{opt_tp2}</code>  (+50 pts)
+🛑 <b>SL     :</b> <code>₹{opt_sl}</code>   (-25 pts)
+━━━━━━━━━━━━━━━━━
+💡 Book 50% at TP1, move SL to entry!
+━━━━━━━━━━━━━━━━━
+🕐 {now_ist}
 
 ⚠️ <i>Educational only. Trade at your own risk.</i>"""
 
@@ -103,8 +148,9 @@ def scan():
             ob    = find_ob(df, i, "BEAR")
             trend = "BEARISH"
 
-    curr   = df.iloc[-1]
-    curr_i = len(df) - 1
+    curr      = df.iloc[-1]
+    curr_i    = len(df) - 1
+    nifty_ltp = round(float(curr["close"]))
 
     if trend == "BULLISH" and ob:
         if curr["low"] <= ob["top"] and curr["low"] >= ob["bot"] - 10:
@@ -113,7 +159,7 @@ def scan():
                 sl    = ob["bot"] - SL_BUFFER
                 tp1   = entry + (entry - sl) * RR_TP1
                 tp2   = entry + (entry - sl) * RR_TP2
-                send_telegram(format_signal("BUY", entry, sl, tp1, tp2))
+                send_telegram(format_signal("BUY", entry, sl, tp1, tp2, nifty_ltp))
                 last_signal = {"type": "BUY", "bar": curr_i}
                 print("BUY sent!")
 
@@ -124,23 +170,22 @@ def scan():
                 sl    = ob["top"] + SL_BUFFER
                 tp1   = entry - (sl - entry) * RR_TP1
                 tp2   = entry - (sl - entry) * RR_TP2
-                send_telegram(format_signal("SELL", entry, sl, tp1, tp2))
+                send_telegram(format_signal("SELL", entry, sl, tp1, tp2, nifty_ltp))
                 last_signal = {"type": "SELL", "bar": curr_i}
                 print("SELL sent!")
 
 print("SMC Bot Started!")
-send_telegram("🤖 <b>SMC Bot Started!</b>\nScanning NIFTY 50 every 60 seconds...")
+send_telegram("🤖 <b>SMC Bot Started!</b>\n📊 Scanning NIFTY 50 every 60 seconds\n⏱️ Timeframe: 5 Minutes\n✅ ATM Options activated!\n🕐 Market: 9:15 AM - 3:30 PM IST")
 
 while True:
     try:
-        now = datetime.now()
-        if now.weekday() < 5 and \
-           (now.hour > 9 or (now.hour == 9 and now.minute >= 15)) and \
-           (now.hour < 15 or (now.hour == 15 and now.minute <= 30)):
-            print(f"Scanning {now.strftime('%H:%M:%S')}...")
+        if is_market_open():
+            now_ist = datetime.now(IST).strftime("%H:%M:%S")
+            print(f"Scanning {now_ist} IST...")
             scan()
         else:
-            print("Market closed...")
+            now_ist = datetime.now(IST).strftime("%H:%M:%S")
+            print(f"Market closed... {now_ist} IST")
     except Exception as e:
         print("Error:", e)
     time.sleep(SCAN_EVERY)
