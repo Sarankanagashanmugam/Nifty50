@@ -19,7 +19,8 @@ OPT_TP1 = 25
 OPT_TP2 = 50
 OPT_SL  = 25
 
-last_signal = {"type": None, "bar": 0}
+last_signal        = {"type": None, "bar": 0}
+market_opened_today = None  # ✅ Tracks if 9:15 AM message sent today
 
 # IST Timezone
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -41,7 +42,21 @@ def send_telegram(message):
     except Exception as e:
         print("Error:", e)
 
-# ✅ NEW: Ready Alert Message (sent before main signal)
+# ✅ Daily 9:15 AM Market Open Message
+def send_market_open_message():
+    now_ist = datetime.now(IST).strftime("%d %b %Y")
+    send_telegram(
+        "🔔 <b>Market is Now Open!</b>\n\n"
+        f"📅 {now_ist}\n"
+        "📊 Scanning NIFTY 50 for SMC Signals\n"
+        "⏱️ Timeframe: 5 Minutes\n"
+        "🕐 9:15 AM - 3:30 PM IST\n"
+        "✅ Bot is Active — Signals will fire soon!\n\n"
+        "⚠️ <i>Educational only. Trade at your own risk.</i>"
+    )
+    print("Market Open message sent!")
+
+# ✅ Ready Alert (sent before main signal)
 def send_ready_alert(direction):
     if direction == "BUY":
         msg = (
@@ -94,7 +109,6 @@ def find_ob(df, bos_i, direction):
             return {"top": df["high"].iloc[i], "bot": df["low"].iloc[i]}
     return None
 
-# ✅ UPDATED: Signal format matches your exact format
 def format_signal(signal, entry, sl, tp1, tp2, nifty_price):
     now_ist    = datetime.now(IST).strftime("%d %b %Y  %H:%M IST")
     emoji      = "🟢" if signal == "BUY" else "🔴"
@@ -160,12 +174,8 @@ def scan():
                 sl    = ob["bot"] - SL_BUFFER
                 tp1   = entry + (entry - sl) * RR_TP1
                 tp2   = entry + (entry - sl) * RR_TP2
-
-                # ✅ Step 1: Send Ready Alert
                 send_ready_alert("BUY")
-                time.sleep(5)  # 5 sec gap
-
-                # ✅ Step 2: Send Full Signal
+                time.sleep(5)
                 send_telegram(format_signal("BUY", entry, sl, tp1, tp2, nifty_ltp))
                 last_signal = {"type": "BUY", "bar": curr_i}
                 print("BUY sent!")
@@ -177,12 +187,8 @@ def scan():
                 sl    = ob["top"] + SL_BUFFER
                 tp1   = entry - (sl - entry) * RR_TP1
                 tp2   = entry - (sl - entry) * RR_TP2
-
-                # ✅ Step 1: Send Ready Alert
                 send_ready_alert("SELL")
-                time.sleep(5)  # 5 sec gap
-
-                # ✅ Step 2: Send Full Signal
+                time.sleep(5)
                 send_telegram(format_signal("SELL", entry, sl, tp1, tp2, nifty_ltp))
                 last_signal = {"type": "SELL", "bar": curr_i}
                 print("SELL sent!")
@@ -198,13 +204,21 @@ send_telegram(
 
 while True:
     try:
+        now_ist = datetime.now(IST)
+        today   = now_ist.date()
+
         if is_market_open():
-            now_ist = datetime.now(IST).strftime("%H:%M:%S")
-            print(f"Scanning {now_ist} IST...")
+            # ✅ Send 9:15 AM message once per day
+            if market_opened_today != today:
+                market_opened_today = today
+                send_market_open_message()
+
+            print(f"Scanning {now_ist.strftime('%H:%M:%S')} IST...")
             scan()
         else:
-            now_ist = datetime.now(IST).strftime("%H:%M:%S")
-            print(f"Market closed... {now_ist} IST")
+            print(f"Market closed... {now_ist.strftime('%H:%M:%S')} IST")
+
     except Exception as e:
         print("Error:", e)
+
     time.sleep(SCAN_EVERY)
