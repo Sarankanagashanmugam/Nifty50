@@ -4,7 +4,7 @@ import requests
 import time
 from datetime import datetime, timezone, timedelta
 
-BOT_TOKEN  = "8429138467:AAFi-Ee71HHLEh_dupW0gms0baS91VGDufY"
+BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
 CHAT_ID    = "-1003872921226"
 SYMBOL     = "^NSEI"
 INTERVAL   = "5m"
