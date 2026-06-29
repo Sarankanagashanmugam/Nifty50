@@ -4,10 +4,10 @@ import requests
 import time
 from datetime import datetime, timezone, timedelta
 
-BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
+BOT_TOKEN  = "8429138467:AAFi-Ee71HHLEh_dupW0gms0baS91VGDufY"
 CHAT_ID    = "-1003872921226"
 SYMBOL     = "^NSEI"
-INTERVAL   = "5m"          # ✅ Changed to 5 minutes
+INTERVAL   = "5m"
 SCAN_EVERY = 60
 SWING_LEN  = 5
 RR_TP1     = 1.5
@@ -21,15 +21,13 @@ OPT_SL  = 25
 
 last_signal = {"type": None, "bar": 0}
 
-# ✅ IST Timezone fix
+# IST Timezone
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def is_market_open():
     now_ist = datetime.now(IST)
-    # Monday=0 to Friday=4
     if now_ist.weekday() >= 5:
         return False
-    # Market hours 9:15 AM to 3:30 PM IST
     market_open  = now_ist.replace(hour=9,  minute=15, second=0)
     market_close = now_ist.replace(hour=15, minute=30, second=0)
     return market_open <= now_ist <= market_close
@@ -42,6 +40,22 @@ def send_telegram(message):
         print("Sent:", r.status_code)
     except Exception as e:
         print("Error:", e)
+
+# ✅ NEW: Ready Alert Message (sent before main signal)
+def send_ready_alert(direction):
+    if direction == "BUY":
+        msg = (
+            "⚡️ <b>SIGNAL LOADING...</b>\n\n"
+            "🟢 Get Ready for <b>CE</b> 📈\n"
+            "⏳ Confirming entry... wait for signal!"
+        )
+    else:
+        msg = (
+            "⚡️ <b>SIGNAL LOADING...</b>\n\n"
+            "🔴 Get Ready for <b>PE</b> 📉\n"
+            "⏳ Confirming entry... wait for signal!"
+        )
+    send_telegram(msg)
 
 def get_candles():
     try:
@@ -80,17 +94,11 @@ def find_ob(df, bos_i, direction):
             return {"top": df["high"].iloc[i], "bot": df["low"].iloc[i]}
     return None
 
+# ✅ UPDATED: Signal format matches your exact format
 def format_signal(signal, entry, sl, tp1, tp2, nifty_price):
-    risk     = abs(entry - sl)
-    rr       = round(abs(tp2 - entry) / risk, 1) if risk > 0 else 0
-    now_ist  = datetime.now(IST).strftime("%d %b %Y  %H:%M IST")
-    emoji    = "🟢" if signal == "BUY" else "🔴"
-    arrow    = "▲" if signal == "BUY" else "▼"
-    trend    = "BULLISH" if signal == "BUY" else "BEARISH"
-    pts1     = round(tp1 - entry) if signal == "BUY" else round(entry - tp1)
-    pts2     = round(tp2 - entry) if signal == "BUY" else round(entry - tp2)
-
-    # ATM Option
+    now_ist    = datetime.now(IST).strftime("%d %b %Y  %H:%M IST")
+    emoji      = "🟢" if signal == "BUY" else "🔴"
+    arrow      = "▲ BUY | 5m | BULLISH" if signal == "BUY" else "▼ SELL | 5m | BEARISH"
     atm_strike = get_atm_strike(nifty_price)
     opt_type   = "CE 📈" if signal == "BUY" else "PE 📉"
     premium    = get_option_premium(nifty_price, atm_strike)
@@ -98,30 +106,23 @@ def format_signal(signal, entry, sl, tp1, tp2, nifty_price):
     opt_tp2    = premium + OPT_TP2
     opt_sl     = premium - OPT_SL
 
-    return f"""{emoji} <b>SMC SIGNAL — NIFTY 50</b> {emoji}
-
-{arrow} <b>{signal}</b> | ⏱️ 5m | {trend}
-
-━━━━━━━━━━━━━━━━━
-📍 <b>Entry :</b> <code>{round(entry)}</code>
-🛑 <b>SL    :</b> <code>{round(sl)}</code>
-🎯 <b>TP1   :</b> <code>{round(tp1)}</code>  (+{pts1} pts)
-🏆 <b>TP2   :</b> <code>{round(tp2)}</code>  (+{pts2} pts)
-📊 <b>R:R   :</b> 1:{rr}
-━━━━━━━━━━━━━━━━━
-🎯 <b>ATM OPTION</b>
-
-📌 <b>Strike :</b> <code>{atm_strike} {opt_type}</code>
-💰 <b>Premium:</b> <code>₹{premium}</code>
-🎯 <b>TP1    :</b> <code>₹{opt_tp1}</code>  (+25 pts)
-🏆 <b>TP2    :</b> <code>₹{opt_tp2}</code>  (+50 pts)
-🛑 <b>SL     :</b> <code>₹{opt_sl}</code>   (-25 pts)
-━━━━━━━━━━━━━━━━━
-💡 Book 50% at TP1, move SL to entry!
-━━━━━━━━━━━━━━━━━
-🕐 {now_ist}
-
-⚠️ <i>Educational only. Trade at your own risk.</i>"""
+    return (
+        f"{emoji}<b>NIFTY--50</b>\n"
+        f"{arrow}\n\n"
+        f"📍 Entry : <code>{round(entry)}</code>\n"
+        f"🛑 SL    : <code>{round(sl)}</code>\n"
+        f"🎯 TP1   : <code>{round(tp1)}</code>\n"
+        f"🏆 TP2   : <code>{round(tp2)}</code>\n\n"
+        f"🎯 <b>ATM OPTION</b>\n"
+        f"📌 Strike : <code>{atm_strike} {opt_type}</code>\n"
+        f"💰 Premium: <code>₹{premium}</code>\n"
+        f"🎯 TP1    : <code>₹{opt_tp1}</code>\n"
+        f"🏆 TP2    : <code>₹{opt_tp2}</code>\n"
+        f"🛑 SL     : <code>₹{opt_sl}</code>\n\n"
+        f"💡 Book 50% at TP1, move SL to entry!\n"
+        f"🕐 {now_ist}\n\n"
+        f"⚠️ <i>Educational only. Trade at your own risk.</i>"
+    )
 
 def scan():
     global last_signal
@@ -159,6 +160,12 @@ def scan():
                 sl    = ob["bot"] - SL_BUFFER
                 tp1   = entry + (entry - sl) * RR_TP1
                 tp2   = entry + (entry - sl) * RR_TP2
+
+                # ✅ Step 1: Send Ready Alert
+                send_ready_alert("BUY")
+                time.sleep(5)  # 5 sec gap
+
+                # ✅ Step 2: Send Full Signal
                 send_telegram(format_signal("BUY", entry, sl, tp1, tp2, nifty_ltp))
                 last_signal = {"type": "BUY", "bar": curr_i}
                 print("BUY sent!")
@@ -170,12 +177,24 @@ def scan():
                 sl    = ob["top"] + SL_BUFFER
                 tp1   = entry - (sl - entry) * RR_TP1
                 tp2   = entry - (sl - entry) * RR_TP2
+
+                # ✅ Step 1: Send Ready Alert
+                send_ready_alert("SELL")
+                time.sleep(5)  # 5 sec gap
+
+                # ✅ Step 2: Send Full Signal
                 send_telegram(format_signal("SELL", entry, sl, tp1, tp2, nifty_ltp))
                 last_signal = {"type": "SELL", "bar": curr_i}
                 print("SELL sent!")
 
 print("SMC Bot Started!")
-send_telegram("🤖 <b>SMC Bot Started!</b>\n📊 Scanning NIFTY 50 every 60 seconds\n⏱️ Timeframe: 5 Minutes\n✅ ATM Options activated!\n🕐 Market: 9:15 AM - 3:30 PM IST")
+send_telegram(
+    "🤖 <b>SMC Bot Started!</b>\n"
+    "📊 Scanning NIFTY 50 every 60 seconds\n"
+    "⏱️ Timeframe: 5 Minutes\n"
+    "✅ ATM Options activated!\n"
+    "🕐 Market: 9:15 AM - 3:30 PM IST"
+)
 
 while True:
     try:
