@@ -8,7 +8,7 @@ from dhanhq import DhanContext, dhanhq
 # ─────────────────────────────────────────
 # CONFIG — UPDATE THESE
 # ─────────────────────────────────────────
-BOT_TOKEN  = "8429138467:AAFi-Ee71HHLEh_dupW0gms0baS91VGDufY"
+BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
 CHAT_ID    = "-1003872921226"
 
 DHAN_CLIENT_ID    = "1112186743"
