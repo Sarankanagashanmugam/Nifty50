@@ -8,11 +8,11 @@ from dhanhq import DhanContext, dhanhq
 # ─────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────
-BOT_TOKEN  = "8429138467:AAFi-Ee71HHLEh_dupW0gms0baS91VGDufY"
+BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
 CHAT_ID    = "-1003872921226"
 
 DHAN_CLIENT_ID    = "1112186743"
-DHAN_ACCESS_TOKEN = "PASTE_YOUR_FRESH_TOKEN_HERE"  # ⚠️ Update every morning!
+DHAN_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzgyOTk2OTQ4LCJpYXQiOjE3ODI5MTA1NDgsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTEyMTg2NzQzIn0.pa3IK_c4W6JC1XJyuD_R2BvZxfWZn0MZ66FWY9HUo9I7C_ie2EPd6gfVFXJ2cAJiEeYr0VSzy4_TBdoOIT-oqw"
 
 NIFTY_SECURITY_ID  = "13"
 NIFTY_EXCHANGE_SEG = "IDX_I"
