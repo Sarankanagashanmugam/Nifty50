@@ -8,11 +8,12 @@ from dhanhq import DhanContext, dhanhq
 # ─────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────
-BOT_TOKEN  = "8429138467:AAEV3QF6VPqFys1jINIXB0Fs3hA_-Xhxnhk"
+BOT_TOKEN  = "8429138467:AAFi-Ee71HHLEh_dupW0gms0baS91VGDufY"
 CHAT_ID    = "-1003872921226"
 
 DHAN_CLIENT_ID    = "1112186743"
-DHAN_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzgyOTk2OTQ4LCJpYXQiOjE3ODI5MTA1NDgsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTEyMTg2NzQzIn0.pa3IK_c4W6JC1XJyuD_R2BvZxfWZn0MZ66FWY9HUo9I7C_ie2EPd6gfVFXJ2cAJiEeYr0VSzy4_TBdoOIT-oqw"
+DHAN_ACCESS_TOKEN = "PASTE_YOUR_FRESH_TOKEN_HERE"  # ⚠️ Update every morning!
+
 NIFTY_SECURITY_ID  = "13"
 NIFTY_EXCHANGE_SEG = "IDX_I"
 NIFTY_INSTRUMENT   = "INDEX"
@@ -91,8 +92,9 @@ def send_ready_alert(direction):
     send_telegram(msg)
 
 # ─────────────────────────────────────────
-# DHAN CANDLE DATA
-# BUG FIX 1: int(interval) + isinstance validation
+# DHAN CANDLE DATA — Direct REST API call
+# ✅ Bypasses dhanhq library parameter issues
+# ✅ Uses correct Dhan v2 endpoint directly
 # ─────────────────────────────────────────
 def get_candles_dhan(interval=5):
     try:
@@ -100,32 +102,37 @@ def get_candles_dhan(interval=5):
         from_date = (now - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
         to_date   = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        response = dhan.intraday_minute_data(
-            security_id      = NIFTY_SECURITY_ID,
-            exchange_segment = NIFTY_EXCHANGE_SEG,
-            instrument_type  = NIFTY_INSTRUMENT,
-            from_date        = from_date,
-            to_date          = to_date,
-            interval         = int(interval)  # ✅ Always integer
-        )
+        url     = "https://api.dhan.co/v2/charts/intraday"
+        headers = {
+            "Content-Type":  "application/json",
+            "access-token":  DHAN_ACCESS_TOKEN,
+            "client-id":     DHAN_CLIENT_ID
+        }
+        payload = {
+            "securityId":      NIFTY_SECURITY_ID,
+            "exchangeSegment": NIFTY_EXCHANGE_SEG,
+            "instrument":      NIFTY_INSTRUMENT,
+            "interval":        str(interval),   # ✅ Dhan v2 expects string
+            "oi":              False,
+            "fromDate":        from_date,
+            "toDate":          to_date
+        }
 
-        if not response or not isinstance(response, dict):
-            print(f"Dhan ({interval}m): invalid response → {str(response)[:120]}")
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+
+        if resp.status_code != 200:
+            print(f"Dhan ({interval}m): HTTP {resp.status_code} → {resp.text[:120]}")
             return None
 
-        if "data" not in response:
-            print(f"Dhan ({interval}m): no 'data' key → {str(response)[:120]}")
-            return None
-
-        data = response["data"]
+        data = resp.json()
 
         if not isinstance(data, dict):
-            print(f"Dhan ({interval}m): data not dict → {str(data)[:120]}")
+            print(f"Dhan ({interval}m): response not dict → {str(data)[:120]}")
             return None
 
         timestamps = data.get("timestamp", [])
         if not timestamps:
-            print(f"Dhan ({interval}m): empty timestamp list")
+            print(f"Dhan ({interval}m): empty data → {str(data)[:120]}")
             return None
 
         df = pd.DataFrame({
